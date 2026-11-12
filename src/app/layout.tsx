@@ -17,111 +17,27 @@ const geistMono = Geist_Mono({
   preload: true,
 });
 
-const siteUrl = "https://opexcloud.com.ng";
-
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-
   title: {
-    default: "OPEX Cloud | Enterprise Cloud Infrastructure in Nigeria",
-    template: "%s | OPEX Cloud",
+    default: "OPEX Cloud Requirements",
+    template: "%s | OPEX Cloud Requirements",
   },
-
-  description:
-    "OPEX Cloud provides enterprise cloud infrastructure for Nigeria, with virtual private cloud, compute, storage, networking, cloud migration, security, and managed infrastructure services from OPEX Consulting Limited.",
-
-  applicationName: "OPEX Cloud",
-
-  keywords: [
-    "OPEX Cloud",
-    "OPEX Consulting Limited",
-    "enterprise cloud infrastructure Nigeria",
-    "cloud services Nigeria",
-    "virtual private cloud Nigeria",
-    "VPC Nigeria",
-    "cloud compute",
-    "cloud storage",
-    "private cloud networking",
-    "managed cloud services",
-    "cloud migration Nigeria",
-    "cloud security",
-    "backup and disaster recovery",
-    "data residency Nigeria",
-    "enterprise infrastructure",
-  ],
-
-  authors: [
-    {
-      name: "OPEX Consulting Limited",
-      url: "https://opexconsult.com",
-    },
-  ],
-
+  description: "Private requirements gathering and pro-forma invoicing for OPEX Cloud clients.",
+  applicationName: "OPEX Cloud Requirements",
   creator: "OPEX Consulting Limited",
-  publisher: "OPEX Consulting Limited",
-
-  alternates: {
-    canonical: "/",
-  },
-
-  openGraph: {
-    type: "website",
-    locale: "en_NG",
-    url: siteUrl,
-    siteName: "OPEX Cloud",
-    title: "OPEX Cloud | Enterprise Cloud Infrastructure. Built for Nigeria.",
-    description:
-      "Enterprise cloud infrastructure, migration, security, and managed services for organisations operating in Nigeria.",
-    images: [
-      {
-        url: "/images/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "OPEX Cloud — Enterprise Cloud Infrastructure. Built for Nigeria.",
-      },
-    ],
-  },
-
-  twitter: {
-    card: "summary_large_image",
-    title: "OPEX Cloud | Enterprise Cloud Infrastructure",
-    description:
-      "Enterprise cloud infrastructure, migration, and managed services for organisations in Nigeria.",
-    images: ["/images/og-image.png"],
-  },
-
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
-  },
-
-  category: "technology",
+  // Private client portal: never indexed.
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
 export const viewport: Viewport = {
+  themeColor: "#07152f",
   width: "device-width",
   initialScale: 1,
-  themeColor: "#eaf1f9",
-  colorScheme: "light",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en-NG"
-      className={`${montserrat.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en-GB" className={`${montserrat.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );
