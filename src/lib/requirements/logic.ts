@@ -8,7 +8,7 @@ export const STEPS = [
   { id: "target", title: "Target & hosting", short: "Target" },
   { id: "inventory", title: "Server inventory", short: "Servers" },
   { id: "review", title: "Review & submit", short: "Review" },
-  { id: "invoice", title: "Pro-forma invoice", short: "Invoice" },
+  { id: "invoice", title: "Invoice", short: "Invoice" },
 ] as const;
 
 export const REVIEW_STEP = 5;

@@ -1,33 +1,42 @@
 import { loadPaymentDetails } from "@/lib/invoice/payment";
 import { isDemo, loadDraft } from "@/lib/requirements/server";
 import { checkToken, json } from "@/lib/requirements/http";
-import { ensureInvoice, listInvoices, rowToView } from "@/lib/invoice/service";
+import { listInvoices, rowToView } from "@/lib/invoice/service";
+import { clientInvoiceState } from "@/lib/invoice/review";
 import { loadSettingRows, settingsFromRows } from "@/lib/pricing/data";
+import { SUBMITTED_STATUSES } from "@/lib/requirements/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Current pro-forma invoice for the saved answers (created or repriced on demand). Client-safe fields only. */
+/**
+ * Invoice status for the client (read-only; pricing happens on submit). Prices are returned only for the latest
+ * version OPEX approved and emailed. Internal review details (rejections, notes, margins) are never returned.
+ */
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   if (!checkToken(token)) return json({ success: false, message: "This link is not recognised." }, 404);
-  if (isDemo(token)) return json({ success: false, message: "Demo links price in the browser: use the preview endpoint." }, 400);
+  if (isDemo(token)) return json({ success: true, state: "not_submitted", invoice: null, email: "" });
   try {
     const found = await loadDraft(token);
     if (!found) return json({ success: false, message: "This link is not recognised." }, 404);
-    const row = await ensureInvoice(found.p, found.draft, "view", true);
-    if (!row) return json({ success: true, invoice: null, versions: [], message: "Add your servers or services to see your invoice." });
+    const submitted = SUBMITTED_STATUSES.includes(found.p.status);
+    const rows = await listInvoices(found.p.id);
+    const view = clientInvoiceState(rows, submitted || found.p.status === "edited");
+    const email = found.draft.answers.contact.contactEmail?.trim() ?? "";
+    if (!view.sent) return json({ success: true, state: view.state, invoice: null, email });
     const settings = settingsFromRows(await loadSettingRows());
-    const versions = (await listInvoices(found.p.id)).map((v) => ({
-      version: v.version,
-      status: v.status,
-      createdAt: v.created_at,
-      monthlyTotal: Number(v.monthly_total),
-      issued: Boolean(v.issued_at),
-    }));
-    return json({ success: true, invoice: rowToView(row, settings.showPartner, await loadPaymentDetails()), versions, assumptions: row.inputs_snapshot.assumptions });
+    return json({
+      success: true,
+      state: "sent",
+      updatePending: view.updatePending,
+      sentAt: view.sent.sent_at,
+      sentTo: view.sent.sent_to,
+      email,
+      invoice: rowToView(view.sent, settings.showPartner, await loadPaymentDetails()),
+    });
   } catch (error) {
     console.error("[invoice] load failed", error);
-    return json({ success: false, message: "We couldn't prepare your invoice just now." }, 500);
+    return json({ success: false, message: "We couldn't load your invoice status just now." }, 500);
   }
 }

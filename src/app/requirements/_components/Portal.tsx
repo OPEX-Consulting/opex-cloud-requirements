@@ -509,11 +509,11 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
               {status === "resubmitted"
                 ? "You've updated and resubmitted them. "
                 : ""}
-              You can still reopen and edit your answers: we&apos;ll see each change, and your invoice updates with a new version.
+              Our team is reviewing them and will email your invoice once it&apos;s approved. You can still reopen and edit your answers: we&apos;ll review each change before sending an updated invoice.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <button type="button" onClick={() => goTo(INVOICE_STEP)} className="opex-button-primary">
-                <FiFileText aria-hidden /> View pro-forma invoice
+                <FiFileText aria-hidden /> Invoice status
               </button>
               <button type="button" onClick={() => goTo(REVIEW_STEP)} className="opex-button-secondary">
                 <FiEdit2 aria-hidden /> Reopen and edit
@@ -731,7 +731,7 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-opex-blue">Step 6 of {STEPS.length}</p>
                 <h2 className="mt-1.5 text-2xl font-bold tracking-tight text-opex-navy sm:text-[28px]">Review & submit</h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-secondary">
-                  Check your answers below, then submit them to the OPEX Cloud team. Next you&apos;ll see your pro-forma invoice. You can come
+                  Check your answers below, then submit them to the OPEX Cloud team. Our team then reviews them and emails your invoice once it&apos;s approved. You can come
                   back and change anything after submitting.
                 </p>
                 {status === "edited" && (
@@ -769,10 +769,9 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
             <InvoiceStep
               token={token}
               mode={mode}
-              draft={draft}
               flush={flushAndWait}
               onEdit={goTo}
-              justSubmitted={justSubmitted}
+              submitted={submittedNow || Boolean(submittedAt)}
               submittedBanner={
                 justSubmitted ? (
                   <div className="mb-5 flex items-center gap-2 rounded-2xl border border-[#cfe9d7] bg-[#f1faf4] p-4 text-sm font-semibold text-[#15803d]">
@@ -784,7 +783,7 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
                     <p className="text-sm text-[#8a3a17]">
                       {status === "edited"
                         ? "You've changed answers since you last submitted. Resubmit so our team works from the latest version."
-                        : "This invoice is a preview until you submit your requirements."}
+                        : "Submit your requirements and our team will review them and email your invoice."}
                     </p>
                     <button type="button" onClick={submit} disabled={submitting} className="opex-button-primary shrink-0">
                       {submitting ? <FiRefreshCw aria-hidden className="animate-spin" /> : <FiCheck aria-hidden />}{" "}
@@ -820,7 +819,7 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
                     </>
                   ) : (
                     <>
-                      {status === "edited" ? "Resubmit and view invoice" : "Submit and view invoice"} <FiCheck aria-hidden />
+                      {status === "edited" ? "Resubmit requirements" : "Submit requirements"} <FiCheck aria-hidden />
                     </>
                   )}
                 </button>
@@ -836,11 +835,6 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
                 </p>
               )}
               {step < REVIEW_STEP && !showStepError && <p className="text-[11px] text-muted sm:text-right">Fields marked required must be filled before you continue. You can come back and change anything, even after you submit.</p>}
-              {step === REVIEW_STEP && !submittedNow && (
-                <button type="button" onClick={() => goTo(INVOICE_STEP)} className="text-xs font-semibold text-opex-blue underline underline-offset-4 sm:text-right">
-                  Preview the invoice first
-                </button>
-              )}
             </div>
           </div>
         </div>

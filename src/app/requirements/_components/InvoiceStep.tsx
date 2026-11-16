@@ -1,102 +1,87 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FiAlertCircle, FiDownload, FiEdit2, FiFileText, FiInfo, FiRefreshCw } from "react-icons/fi";
-import type { Draft, InvoiceView, PortalPayload } from "@/lib/requirements/schema";
+import { useCallback, useEffect, useState } from "react";
+import { FiAlertCircle, FiClock, FiEdit2, FiInfo, FiMail, FiRefreshCw } from "react-icons/fi";
+import type { InvoiceView, PortalPayload } from "@/lib/requirements/schema";
 import { longDate, naira, qtyFmt } from "@/lib/invoice/view";
 import { StepHeader } from "./ui";
 
-type Versions = { version: number; status: string; createdAt: string; monthlyTotal: number; issued: boolean }[];
+type Status = {
+  state: "not_submitted" | "in_review" | "sent";
+  invoice: InvoiceView | null;
+  email?: string;
+  sentAt?: string | null;
+  sentTo?: string | null;
+  updatePending?: boolean;
+};
 
+/**
+ * Review gate: OPEX reviews every invoice before the client sees a price. This step shows the review status and,
+ * once OPEX has approved and emailed the invoice, the approved invoice (read-only). There is no download.
+ */
 export function InvoiceStep({
   token,
   mode,
-  draft,
   flush,
   onEdit,
-  justSubmitted,
+  submitted,
   submittedBanner,
 }: {
   token: string;
   mode: PortalPayload["mode"];
-  draft: Draft;
   /** Saves pending changes; resolves once the server has the latest answers. */
   flush: () => Promise<void>;
   onEdit: (step: number) => void;
-  justSubmitted: boolean;
+  /** The requirements have been submitted (demo: in this browser). */
+  submitted: boolean;
   submittedBanner?: React.ReactNode;
 }) {
-  const [inv, setInv] = useState<InvoiceView | null>(null);
-  const [versions, setVersions] = useState<Versions>([]);
-  const [state, setState] = useState<"loading" | "ready" | "empty" | "error">("loading");
+  const [data, setData] = useState<Status | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState("");
-  const [downloading, setDownloading] = useState(false);
-  const draftRef = useRef(draft);
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
 
   const load = useCallback(async () => {
     setState("loading");
     try {
-      let res: Response;
       if (mode === "demo") {
-        res = await fetch(`/api/requirements/${encodeURIComponent(token)}/invoice/preview`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(draftRef.current),
-        });
-      } else {
-        await flush();
-        res = await fetch(`/api/requirements/${encodeURIComponent(token)}/invoice`, { cache: "no-store" });
+        setData({ state: submitted ? "in_review" : "not_submitted", invoice: null });
+        setState("ready");
+        return;
       }
-      const body = (await res.json()) as { success: boolean; invoice: InvoiceView | null; versions?: Versions; message?: string };
-      if (!res.ok || !body.success) throw new Error(body.message || "We couldn't prepare your invoice just now.");
-      setInv(body.invoice);
-      setVersions(body.versions ?? []);
-      setMessage(body.message ?? "");
-      setState(body.invoice ? "ready" : "empty");
+      await flush();
+      const res = await fetch(`/api/requirements/${encodeURIComponent(token)}/invoice`, { cache: "no-store" });
+      const body = (await res.json()) as Status & { success: boolean; message?: string };
+      if (!res.ok || !body.success) throw new Error(body.message || "We couldn't load your invoice status just now.");
+      setData(body);
+      setState("ready");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "We couldn't prepare your invoice just now.");
+      setMessage(e instanceof Error ? e.message : "We couldn't load your invoice status just now.");
       setState("error");
     }
-  }, [flush, mode, token]);
+  }, [flush, mode, submitted, token]);
 
-  // Fetching the invoice is synchronising with the server, so loading state is set from the effect on purpose.
+  // Fetching the status is synchronising with the server, so loading state is set from the effect on purpose.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     void load();
   }, [load]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const downloadPdf = async () => {
-    setDownloading(true);
-    try {
-      await flush();
-      const a = document.createElement("a");
-      a.href = `/api/requirements/${encodeURIComponent(token)}/invoice.pdf`;
-      a.rel = "noopener";
-      a.click();
-      // The download issues this version; refresh the version list shortly after.
-      setTimeout(() => void load(), 2500);
-    } finally {
-      setTimeout(() => setDownloading(false), 1500);
-    }
-  };
-
-  const superseded = versions.filter((v) => v.status === "superseded").length;
+  const inv = data?.state === "sent" ? data.invoice : null;
+  const email = data?.sentTo || data?.email || "";
+  const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" }) : "");
 
   return (
     <>
       <StepHeader
         index={6}
-        title="Pro-forma invoice"
-        intro="Your estimated monthly charges, worked out from your answers. Change any answer and the invoice updates: each change after you download or submit creates a new version."
+        title="Invoice"
+        intro="Our team reviews your requirements and prepares your invoice. Once it's approved, we email it to you – it then also appears here."
       />
       {submittedBanner}
       {state === "loading" && (
         <div className="flex items-center gap-2 rounded-2xl border border-border bg-white p-5 text-sm text-secondary">
-          <FiRefreshCw aria-hidden className="animate-spin" /> Pricing your requirements…
+          <FiRefreshCw aria-hidden className="animate-spin" /> Checking your invoice…
         </div>
       )}
       {state === "error" && (
@@ -107,24 +92,54 @@ export function InvoiceStep({
           </button>
         </div>
       )}
-      {state === "empty" && (
+      {state === "ready" && data?.state === "not_submitted" && (
         <div className="rounded-2xl border border-dashed border-border-hover bg-white p-5">
-          <p className="text-sm font-semibold text-opex-navy">Nothing to price yet</p>
+          <p className="text-sm font-semibold text-opex-navy">Submit your requirements to receive your invoice</p>
           <p className="mt-1 text-xs leading-5 text-muted">
-            {message || "Add your servers (step 5) or the network and services you need (step 4) to see your invoice."}
+            Once you submit, our team reviews your requirements and emails your invoice to the contact address you gave in step 1.
           </p>
-          <div className="mt-3 flex gap-2">
-            <button type="button" className="opex-button-secondary" onClick={() => onEdit(4)}>
-              Add servers
+          <div className="mt-3">
+            <button type="button" className="opex-button-secondary" onClick={() => onEdit(5)}>
+              <FiEdit2 aria-hidden /> Review and submit
             </button>
-            <button type="button" className="opex-button-secondary" onClick={() => onEdit(3)}>
-              Add services
+          </div>
+        </div>
+      )}
+      {state === "ready" && data?.state === "in_review" && (
+        <div className="rounded-2xl border border-border bg-white p-5">
+          <p className="flex items-center gap-2 text-sm font-semibold text-opex-navy">
+            <FiClock aria-hidden /> Your invoice is being reviewed
+          </p>
+          <p className="mt-1 text-[13px] leading-6 text-secondary">
+            Thanks – our team is reviewing your requirements. We&apos;ll email your invoice
+            {email ? (
+              <>
+                {" "}
+                to <b>{email}</b>
+              </>
+            ) : null}{" "}
+            as soon as it&apos;s approved, usually within one working day.
+          </p>
+          <div className="mt-3">
+            <button type="button" className="opex-button-secondary" onClick={() => onEdit(0)}>
+              <FiEdit2 aria-hidden /> Edit answers
             </button>
           </div>
         </div>
       )}
       {state === "ready" && inv && (
         <div className="grid gap-5">
+          <div className="rounded-2xl border border-[#cfe9d7] bg-[#f1faf4] p-4 text-sm text-[#15803d]">
+            <p className="flex items-center gap-2 font-semibold">
+              <FiMail aria-hidden /> Emailed to {email || "you"}
+              {data?.sentAt ? ` on ${fmt(data.sentAt)}` : ""}
+            </p>
+            {data?.updatePending && (
+              <p className="mt-1 text-[13px] text-[#166534]">
+                You&apos;ve changed your requirements since. Our team is reviewing an updated invoice and will email it once approved.
+              </p>
+            )}
+          </div>
           <section className="overflow-hidden rounded-[18px] border border-border bg-white shadow-[0_2px_8px_rgb(7_21_47/2%)]">
             <div className="flex flex-col gap-3 bg-opex-navy px-5 py-4 text-white sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
@@ -280,32 +295,11 @@ export function InvoiceStep({
           </div>
 
           <div className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-            <div className="text-xs leading-5 text-muted">
-              {mode === "demo" ? (
-                <>PDF invoices are available on live client links.</>
-              ) : (
-                <>
-                  Download the PDF for your records.{" "}
-                  {superseded > 0 && `${superseded} earlier version${superseded === 1 ? " was" : "s were"} superseded by your changes.`}
-                </>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => onEdit(0)} className="opex-button-secondary">
-                <FiEdit2 aria-hidden /> Edit answers
-              </button>
-              {mode === "live" && (
-                <button type="button" onClick={downloadPdf} disabled={downloading} className="opex-button-primary">
-                  {downloading ? <FiRefreshCw aria-hidden className="animate-spin" /> : <FiDownload aria-hidden />} Download PDF
-                </button>
-              )}
-            </div>
+            <p className="text-xs leading-5 text-muted">This is the invoice we emailed you. Changing your answers sends an updated invoice for review.</p>
+            <button type="button" onClick={() => onEdit(0)} className="opex-button-secondary">
+              <FiEdit2 aria-hidden /> Edit answers
+            </button>
           </div>
-          {justSubmitted && (
-            <p className="flex items-center gap-1.5 text-xs text-muted">
-              <FiFileText aria-hidden /> Our team has your requirements and this invoice. We&apos;ll be in touch to confirm any assumed lines.
-            </p>
-          )}
         </div>
       )}
     </>

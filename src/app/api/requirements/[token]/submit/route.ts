@@ -1,4 +1,6 @@
-import { isDemo, submitDraft } from "@/lib/requirements/server";
+import { after } from "next/server";
+import { getProject, isDemo, submitDraft } from "@/lib/requirements/server";
+import { notifyReviewNeeded } from "@/lib/invoice/clientmail";
 import { checkToken, json, readJson } from "@/lib/requirements/http";
 import { draftSchema } from "@/lib/requirements/schema";
 import { findMissing } from "@/lib/requirements/logic";
@@ -6,7 +8,7 @@ import { findMissing } from "@/lib/requirements/logic";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Submission: validates required items, saves, marks submitted/resubmitted and issues the current invoice version. */
+/** Submission: validates required items, saves, marks submitted/resubmitted and prices the invoice for OPEX review. */
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   if (!checkToken(token)) return json({ success: false, message: "This link is not recognised." }, 404);
@@ -23,7 +25,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (isDemo(token)) return json({ success: true, demo: true, submittedAt: new Date().toISOString() });
 
   try {
-    const result = await submitDraft(token, parsed.data);
+    const origin = process.env.APP_URL?.replace(/\/$/, "") || new URL(req.url).origin;
+    const result = await submitDraft(token, parsed.data, (row) =>
+      after(async () => {
+        const p = await getProject(token);
+        await notifyReviewNeeded({
+          invoice: row,
+          customerName: row.inputs_snapshot.billTo.name || p?.customer_name || "",
+          projectName: p?.project_name ?? "",
+          adminUrl: `${origin}/admin/reviews/${row.id}`,
+        });
+      }),
+    );
     if (!result.ok) return json({ success: false, message: result.message }, result.status);
     return json({ success: true, submittedAt: result.updatedAt, status: result.status, invoice: result.invoice });
   } catch (error) {

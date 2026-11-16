@@ -4,10 +4,11 @@ import { amountDue } from "./due";
 // Versioning rule:
 //  - The engine inputs derived from the client's answers (plus the bill-to details) are hashed.
 //  - Same hash as the current version -> nothing changes (prices, FX and rate cards stay locked).
-//  - Different hash: if the current version has not been issued yet (never downloaded, never submitted) it is
-//    repriced in place; otherwise a new version is created with the current rate cards and FX, and the old one is
-//    marked 'superseded'.
-//  - A version is issued when its PDF is downloaded or the requirements are submitted.
+//  - Different hash: if the current version is not frozen (not yet approved by OPEX, nothing created in Zoho) it is
+//    repriced in place and goes back to 'pending_review'; otherwise a new version is created with the current rate
+//    cards and FX, and the old one is marked 'superseded'.
+//  - Review gate: versions are priced on submit only. A version is issued when an admin approves it; approval
+//    creates the Zoho invoice and emails the client (see approve.ts). Clients never see unapproved prices.
 import { createHash } from "node:crypto";
 import { db, must } from "../server/db";
 import { loadPricing } from "../pricing/data";
@@ -18,6 +19,7 @@ import type { EngineInputs, EngineResult, Partner, PricingData } from "../pricin
 import type { Draft, InvoiceView } from "../requirements/schema";
 import { INVOICE_TEXT } from "./company";
 import type { PaymentDetails } from "./payment";
+import { applyOverrides, isFrozen, type ReviewOverrides, type ReviewStatus } from "./review";
 import { addDays, billToFrom, buildInvoiceView, type BillTo } from "./view";
 
 export type InvoiceRow = {
@@ -52,6 +54,18 @@ export type InvoiceRow = {
   downloaded_at: string | null;
   download_count: number;
   issued_at: string | null;
+  /** Review gate (migration 0006). */
+  review_status: ReviewStatus;
+  revision: number;
+  review_overrides: ReviewOverrides;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  send_started_at: string | null;
+  sent_at: string | null;
+  sent_to: string | null;
+  send_error: string | null;
+  zoho_invoice_id?: string | null;
 };
 
 export type ProjectRef = { id: string; customer_name: string | null };
@@ -117,30 +131,24 @@ export async function priceDraft(draft: Draft, fallbackName = "") {
   return { pricing, mapped, billTo, hash: hashInputs(mapped.inputs, billTo) };
 }
 
-type Reason = "save" | "view" | "submit" | "download";
+type Reason = "submit";
 
 /**
  * Make sure the project's current invoice reflects the draft. Returns the current row (or null when there is
  * nothing to price and no invoice yet). `create` = create v1 when there is none yet.
  */
-export async function ensureInvoice(project: ProjectRef, draft: Draft, reason: Reason, create: boolean): Promise<InvoiceRow | null> {
-  let current = await getCurrentInvoice(project.id);
-  if (!hasPricedContent(draft)) return current;
-  if (!current && !create) return null;
-
-  const { pricing, mapped, billTo, hash } = await priceDraft(draft, project.customer_name ?? "");
-  const issue = reason === "submit" || reason === "download";
-  const nowIso = new Date().toISOString();
-
-  if (current && current.inputs_hash === hash) {
-    if (issue) current = await markIssued(current, reason);
-    return current;
-  }
-
-  const fx = await effectiveFx(pricing.settings);
-  const result = priceQuote(mapped.inputs, pricing, fx.rate, INVOICE_TEXT.clientNote);
+/** Database fields for a freshly priced quote. */
+export function pricedFields(
+  result: EngineResult,
+  fx: { rate: number; source: string },
+  inputs: EngineInputs,
+  mapped: { assumptions: string[] },
+  billTo: BillTo,
+  pricing: PricingData,
+  hash: string,
+) {
   const q = result.quote;
-  const fields = {
+  return {
     fx_rate_used: fx.rate,
     fx_source: fx.source,
     chosen_partner: result.comparison.chosen,
@@ -154,16 +162,46 @@ export async function ensureInvoice(project: ProjectRef, draft: Draft, reason: R
     amount_due_now: q.amountDueNow,
     amount_due_mode: q.amountDueMode,
     inputs_hash: hash,
-    inputs_snapshot: { inputs: mapped.inputs, assumptions: mapped.assumptions, billTo, quote: q, settings: pricing.settings },
+    inputs_snapshot: { inputs, assumptions: mapped.assumptions, billTo, quote: q, settings: pricing.settings },
+  };
+}
+
+/**
+ * Price the client's answers into the current invoice version (called on submit).
+ * Never issues anything: the version waits for an admin's approval.
+ */
+export async function ensureInvoice(project: ProjectRef, draft: Draft, reason: Reason, create: boolean): Promise<InvoiceRow | null> {
+  const current = await getCurrentInvoice(project.id);
+  if (!hasPricedContent(draft)) return current;
+  if (!current && !create) return null;
+
+  const { pricing, mapped, billTo, hash } = await priceDraft(draft, project.customer_name ?? "");
+  if (current && current.inputs_hash === hash) return current;
+
+  const overrides: ReviewOverrides = current?.review_overrides ?? {};
+  const inputs = applyOverrides(mapped.inputs, overrides);
+  const fx = await effectiveFx(pricing.settings);
+  const result = priceQuote(inputs, pricing, fx.rate, INVOICE_TEXT.clientNote);
+  const nowIso = new Date().toISOString();
+  const fields = {
+    ...pricedFields(result, fx, inputs, mapped, billTo, pricing, hash),
     valid_until: addDays(nowIso, pricing.settings.quoteValidityDays),
     created_at: nowIso,
     created_reason: reason,
-    issued_at: issue ? nowIso : null,
-    ...(reason === "download" ? { downloaded_at: nowIso, download_count: 1 } : {}),
+    // Back in the queue: a change always needs a fresh review.
+    review_status: "pending_review" as ReviewStatus,
+    reviewed_by: null,
+    reviewed_at: null,
+    review_note: null,
   };
 
-  if (current && !current.issued_at) {
-    const { data, error } = await db().from("invoices").update(fields).eq("id", current.id).select("*").single();
+  if (current && !isFrozen(current)) {
+    const { data, error } = await db()
+      .from("invoices")
+      .update({ ...fields, revision: (current.revision ?? 1) + 1 })
+      .eq("id", current.id)
+      .select("*")
+      .single();
     if (error) throw new Error(`invoice update failed: ${error.message}`);
     return data as InvoiceRow;
   }
@@ -181,7 +219,7 @@ export async function ensureInvoice(project: ProjectRef, draft: Draft, reason: R
   }
   const { data, error } = await db()
     .from("invoices")
-    .insert({ project_id: project.id, number, version, status: "current", ...fields })
+    .insert({ project_id: project.id, number, version, status: "current", review_overrides: overrides, ...fields })
     .select("*")
     .single();
   if (error) {
@@ -191,20 +229,6 @@ export async function ensureInvoice(project: ProjectRef, draft: Draft, reason: R
     if (now) return now;
     throw new Error(`invoice insert failed: ${error.message}`);
   }
-  return data as InvoiceRow;
-}
-
-async function markIssued(row: InvoiceRow, reason: Reason): Promise<InvoiceRow> {
-  const nowIso = new Date().toISOString();
-  const patch: Record<string, unknown> = {};
-  if (!row.issued_at) patch.issued_at = nowIso;
-  if (reason === "download") {
-    patch.downloaded_at = nowIso;
-    patch.download_count = (row.download_count ?? 0) + 1;
-  }
-  if (!Object.keys(patch).length) return row;
-  const { data, error } = await db().from("invoices").update(patch).eq("id", row.id).select("*").single();
-  if (error) throw new Error(`invoice issue failed: ${error.message}`);
   return data as InvoiceRow;
 }
 

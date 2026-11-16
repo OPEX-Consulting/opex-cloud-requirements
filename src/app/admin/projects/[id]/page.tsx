@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
 import { db } from "@/lib/server/db";
 import { listInvoices } from "@/lib/invoice/service";
+import { REVIEW_LABELS } from "@/lib/invoice/review";
 import { draftSchema, SERVER_KINDS, type Servers } from "@/lib/requirements/schema";
 import { Summary } from "@/app/requirements/_components/Summary";
 import { CopyButton } from "../../_copy";
@@ -96,7 +97,12 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
                 {invoices.map((i) => (
                   <tr key={i.id} className="border-t border-[#eef1f5]">
                     <td className="py-2 pr-3 font-semibold">{i.number} v{i.version}</td>
-                    <td className="py-2 pr-3">{i.status}{i.issued_at ? " · issued" : ""}</td>
+                    <td className="py-2 pr-3">
+                      {i.status} ·{" "}
+                      <a className="font-semibold text-opex-blue hover:underline" href={`/admin/reviews/${i.id}`}>
+                        {REVIEW_LABELS[i.review_status] ?? i.review_status}
+                      </a>
+                    </td>
                     <td className="py-2 pr-3">{when(i.created_at)}</td>
                     <td className="py-2 pr-3">{i.created_reason}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{ngn(i.subtotal)}</td>

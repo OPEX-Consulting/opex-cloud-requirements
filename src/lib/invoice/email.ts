@@ -1,5 +1,6 @@
 import { amountDue } from "./due";
-// Server-only: email OPEX when a client downloads an invoice PDF (SMTP via nodemailer).
+// Server-only: invoice emails over SMTP (nodemailer): "awaiting review" to OPEX (review.ts flow) and the approved
+// invoice to the client (clientmail.ts). Legacy: download alert.
 // Env: SMTP_HOST, SMTP_PORT (default 465), SMTP_SECURE (default true when port 465), SMTP_USER, SMTP_PASS.
 // Every attempt is written to the `notifications` outbox. Never throws: the download must not depend on email.
 import nodemailer from "nodemailer";
@@ -10,7 +11,7 @@ import { naira } from "./view";
 
 const DEBOUNCE_MS = 10 * 60 * 1000;
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** "[PLACEHOLDER] finance@x.com" -> "finance@x.com"; "Name <a@b.c>" stays as is. */
 export function cleanAddress(v: string) {
@@ -20,6 +21,26 @@ export function cleanAddress(v: string) {
   return m ? m[0] : v.trim();
 }
 
+export function smtpHost() {
+  return (process.env.SMTP_HOST ?? "").trim().replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "").replace(/:\d+$/, "") || undefined;
+}
+
+export const smtpReady = () => Boolean(smtpHost() && process.env.SMTP_USER && process.env.SMTP_PASS);
+
+export function smtpTransport(host = smtpHost()) {
+  const port = Number(process.env.SMTP_PORT || 465);
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  });
+}
+
+/** @deprecated Clients no longer download invoices (review gate); kept for reference. */
 export async function notifyInvoiceDownload(args: {
   invoice: InvoiceRow;
   pdf: Uint8Array;
@@ -95,16 +116,7 @@ ${args.warning ? `<p style="color:#c0262d"><b>Warning:</b> ${esc(args.warning)}<
 <p>The PDF is attached.</p></div>`;
     const text = `${args.warning ? `WARNING: ${args.warning}\n\n` : ""}${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\nWhat changed:\n${changes.map((c) => `- ${c}`).join("\n")}`;
 
-    const port = Number(process.env.SMTP_PORT || 465);
-    const transport = nodemailer.createTransport({
-      host,
-      port,
-      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    });
+    const transport = smtpTransport(host);
     try {
       const info = await transport.sendMail({
         from: EMAIL.from,

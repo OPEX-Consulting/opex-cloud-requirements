@@ -1,7 +1,7 @@
 // Server-only module: import only from route handlers and server components.
 import { db, supabaseConfigured } from "../server/db";
 import { createHash } from "node:crypto";
-import { ensureInvoice } from "../invoice/service";
+import { ensureInvoice, getCurrentInvoice, type InvoiceRow } from "../invoice/service";
 import { DEMO_PROJECT } from "./demo";
 import {
   draftSchema,
@@ -256,16 +256,12 @@ export async function saveDraft(token: string, draft: Draft): Promise<SaveResult
     if (status === "edited") patch.last_edited_at = updatedAt;
     await db().from("projects").update(patch).eq("id", p.id);
   }
-  let invoice = null;
-  try {
-    invoice = inv(await ensureInvoice(p, draft, "save", draft.currentStep >= 6));
-  } catch (e) {
-    console.error("[requirements] invoice recompute failed", e);
-  }
+  // Review gate: invoices are priced on submit only, so autosave never touches them.
+  const invoice = null;
   return { ok: true, updatedAt, status, invoice };
 }
 
-export async function submitDraft(token: string, draft: Draft): Promise<SaveResult> {
+export async function submitDraft(token: string, draft: Draft, onReviewNeeded?: (row: InvoiceRow) => void): Promise<SaveResult> {
   const g = await guard(token);
   if ("err" in g) return g.err;
   const p = g.p;
@@ -279,7 +275,12 @@ export async function submitDraft(token: string, draft: Draft): Promise<SaveResu
   if (error) throw new Error(`submit failed: ${error.message}`);
   let invoice = null;
   try {
-    invoice = inv(await ensureInvoice(p, draft, "submit", true));
+    const before = await getCurrentInvoice(p.id);
+    const row = await ensureInvoice(p, draft, "submit", true);
+    invoice = inv(row);
+    // Tell OPEX there is something to review (new version, or a re-priced/rejected one back in the queue).
+    if (row && row.review_status === "pending_review" && (!before || before.id !== row.id || before.revision !== row.revision || before.review_status !== "pending_review"))
+      onReviewNeeded?.(row);
   } catch (e) {
     console.error("[requirements] invoice on submit failed", e);
   }
