@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/auth";
 import { db } from "@/lib/server/db";
 import { REVIEW_LABELS, type ReviewStatus } from "@/lib/invoice/review";
-import { AdminShell, Card, Flash, ngn, when, type SP } from "../_ui";
+import { clientCc } from "@/lib/invoice/cc";
+import { CC_MAX } from "@/lib/invoice/cc-shared";
+import { AdminShell, Card, Flash, btn, input, ngn, when, type SP } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +76,10 @@ function Table({ rows, empty }: { rows: Row[]; empty: string }) {
 
 export default async function Reviews({ searchParams }: { searchParams: SP }) {
   await requireAdmin();
-  const [{ data: open }, { data: done }] = await Promise.all([
+  const [{ data: open }, { data: done }, cc] = await Promise.all([
     db().from("invoices").select(COLS).eq("status", "current").in("review_status", ["pending_review", "approved", "send_failed", "rejected"]).order("created_at"),
     db().from("invoices").select(COLS).eq("review_status", "sent").order("sent_at", { ascending: false }).limit(20),
+    clientCc(),
   ]);
   const rows = (open ?? []) as unknown as Row[];
   const waiting = rows.filter((r) => r.review_status !== "rejected");
@@ -85,8 +88,19 @@ export default async function Reviews({ searchParams }: { searchParams: SP }) {
     <AdminShell active="reviews">
       <Flash searchParams={searchParams} />
       <p className="mb-5 text-sm text-secondary">
-        Clients never see a price until an invoice is approved here. Approving creates the Zoho Books invoice and emails it to the client (OPEX in copy).
+        Clients never see a price until an invoice is approved here. Approving creates the Zoho Books invoice and emails it to the client, copied to the addresses below.
       </p>
+      <Card title="Copy on client invoice emails">
+        <form action="/api/admin/client-cc" method="post" className="grid gap-2">
+          <p className="text-sm text-secondary">
+            Every invoice emailed to a client is copied (CC) to these addresses. One per line, up to {CC_MAX}. Leave empty to send no copy.
+          </p>
+          <textarea name="cc" rows={Math.min(8, Math.max(3, cc.length + 1))} defaultValue={cc.join("\n")} className={`${input} h-auto py-2 font-mono`} aria-label="CC addresses" />
+          <div>
+            <button className={btn}>Save copy list</button>
+          </div>
+        </form>
+      </Card>
       <Card title={`Waiting for review (${waiting.length})`}>
         <Table rows={waiting} empty="Nothing to review." />
       </Card>

@@ -28,7 +28,8 @@ export type SettingRow = { key: string; value: unknown; label: string; note: str
 const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
 
 export async function loadSettingRows(): Promise<SettingRow[]> {
-  return must(await db().from("pricing_settings").select("*").order("sort"), "pricing_settings") as SettingRow[];
+  // The client CC list lives in the same table but is managed on /admin/reviews, not the pricing page.
+  return must(await db().from("pricing_settings").select("*").neq("key", "client_email_cc").order("sort"), "pricing_settings") as SettingRow[];
 }
 
 export function settingsFromRows(rows: SettingRow[]): PricingSettings {

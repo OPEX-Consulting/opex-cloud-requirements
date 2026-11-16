@@ -9,6 +9,7 @@ import { INVOICE_TEXT } from "@/lib/invoice/company";
 import { amountDue } from "@/lib/invoice/due";
 import { canResend, REVIEW_LABELS, reviewable } from "@/lib/invoice/review";
 import { getInvoice } from "@/lib/invoice/service";
+import { clientCc } from "@/lib/invoice/cc";
 import { AdminShell, Card, Flash, btn, btnLight, input, ngn, when, type SP } from "../../_ui";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const row = await getInvoice(id);
   if (!row) notFound();
-  const [{ data: p }, pricing] = await Promise.all([db().from("projects").select("id, customer_name, project_name, status").eq("id", row.project_id).maybeSingle(), loadPricing()]);
+  const [{ data: p }, pricing, cc] = await Promise.all([db().from("projects").select("id, customer_name, project_name, status").eq("id", row.project_id).maybeSingle(), loadPricing(), clientCc()]);
 
   const inputs = row.inputs_snapshot.inputs;
   const fx = Number(row.fx_rate_used);
@@ -106,7 +107,7 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
 
       <Card title="What the client will receive">
         <p className="mb-2 text-sm">
-          To <b>{bill.contactName || "—"}</b> &lt;{bill.contactEmail || "no email"}&gt;, copy to OPEX · bill to {bill.name || "—"}
+          To <b>{bill.contactName || "—"}</b> &lt;{bill.contactEmail || "no email"}&gt;{cc.length ? `, copy to ${cc.join(", ")}` : ", no copy"} · bill to {bill.name || "—"}
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">

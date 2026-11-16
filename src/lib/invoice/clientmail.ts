@@ -1,11 +1,12 @@
 // Server-only: review-gate emails. Every attempt is written to the `notifications` outbox.
 //  - notifyReviewNeeded: to OPEX (EMAIL.alertTo) when a version needs review. Never throws.
-//  - sendInvoiceToClient: the approved invoice PDF to the client contact, OPEX in CC. Throws on failure so the
+//  - sendInvoiceToClient: the approved invoice PDF to the client contact, CC list from /admin/reviews. Throws on failure so the
 //    caller can mark the version 'send_failed'.
 import { db } from "../server/db";
 import { isEmail } from "../requirements/logic";
 import { COMPANY, EMAIL } from "./company";
 import { amountDue } from "./due";
+import { clientCc } from "./cc";
 import { cleanAddress, esc, smtpHost, smtpReady, smtpTransport } from "./email";
 import { loadPaymentDetails } from "./payment";
 import { paymentConfigured } from "./payment-shared";
@@ -76,7 +77,8 @@ export async function sendInvoiceToClient(args: {
   const to = (bill.contactEmail || "").trim();
   if (!isEmail(to)) throw new Error(`the client contact email "${to || "(blank)"}" is not a valid address`);
   if (!smtpReady()) throw new Error("email is not configured (SMTP_HOST / SMTP_USER / SMTP_PASS)");
-  const cc = cleanAddress(EMAIL.alertTo);
+  const cc = (await clientCc()).filter((a) => a !== to.toLowerCase());
+  const replyTo = cleanAddress(EMAIL.alertTo);
   const number = args.zohoNumber || invoice.number;
   const due = amountDue({ ...invoice, zoho_total: args.zohoTotal });
   const pay = await loadPaymentDetails();
@@ -113,8 +115,8 @@ ${
     const info = await smtpTransport(smtpHost()).sendMail({
       from: EMAIL.from,
       to,
-      cc,
-      replyTo: cc,
+      ...(cc.length ? { cc } : {}),
+      replyTo,
       subject,
       html,
       text,
