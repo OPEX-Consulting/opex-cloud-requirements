@@ -2,7 +2,7 @@ import { audit } from "@/lib/admin/auth";
 import { back, guard, numOrNull, str } from "@/lib/admin/http";
 import { db } from "@/lib/server/db";
 import { loadSettingRows } from "@/lib/pricing/data";
-import { repriceUnsentAfterSettings } from "@/lib/invoice/approve";
+import { repriceNote } from "@/lib/invoice/approve";
 import { needsAutoReprice } from "@/lib/invoice/review";
 
 export const runtime = "nodejs";
@@ -46,14 +46,6 @@ export async function POST(req: Request) {
     changedKeys.push(r.key);
   }
   if (!changedKeys.length) return back(req, "/admin/pricing", { ok: "No changes." });
-  let note = "";
-  if (needsAutoReprice(changedKeys)) {
-    try {
-      const r = await repriceUnsentAfterSettings("settings change", changedKeys);
-      note = ` Re-priced ${r.repriced} invoice(s) awaiting review${r.failed ? `; ${r.failed} failed (see logs)` : ""}. Sent invoices are unchanged.`;
-    } catch (e) {
-      note = ` Settings saved, but re-pricing waiting invoices failed: ${e instanceof Error ? e.message : String(e)}.`;
-    }
-  }
+  const note = needsAutoReprice(changedKeys) ? await repriceNote(changedKeys) : "";
   return back(req, "/admin/pricing", { ok: `Saved ${changedKeys.length} setting(s).${note}` });
 }

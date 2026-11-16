@@ -1,9 +1,11 @@
 import { audit } from "@/lib/admin/auth";
 import { back, guard, numOrNull, str } from "@/lib/admin/http";
 import { db } from "@/lib/server/db";
+import { repriceNote } from "@/lib/invoice/approve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** Add, update or delete a Unitellas server size. */
 export async function POST(req: Request) {
@@ -19,7 +21,7 @@ export async function POST(req: Request) {
     const { error } = await db().from("unitellas_sizes").delete().eq("id", id);
     if (error) return go({ err: error.message });
     await audit("unitellas_sizes", old.size_name, "delete", old, null);
-    return go({ ok: `Deleted ${old.size_name}.` });
+    return go({ ok: `Deleted ${old.size_name}.${await repriceNote(["unitellas_sizes"])}` });
   }
   const row = {
     vcpu: numOrNull(form.get("vcpu")),
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
     const { error } = await db().from("unitellas_sizes").insert(row);
     if (error) return go({ err: error.message });
     await audit("unitellas_sizes", row.size_name, "insert", null, row);
-    return go({ ok: `Added ${row.size_name}.` });
+    return go({ ok: `Added ${row.size_name}.${await repriceNote(["unitellas_sizes"])}` });
   }
   const { data: old } = await db().from("unitellas_sizes").select("vcpu, ram_gb, size_name, linux_usd_hour, windows_usd_hour, sort").eq("id", id).maybeSingle();
   if (!old) return go({ err: "Size not found." });
@@ -46,5 +48,5 @@ export async function POST(req: Request) {
   const { error } = await db().from("unitellas_sizes").update({ ...row, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return go({ err: error.message });
   await audit("unitellas_sizes", row.size_name, "update", old, row);
-  return go({ ok: `Saved ${row.size_name}.` });
+  return go({ ok: `Saved ${row.size_name}.${await repriceNote(["unitellas_sizes"])}` });
 }

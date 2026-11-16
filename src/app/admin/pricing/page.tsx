@@ -80,7 +80,7 @@ export default async function Pricing({ searchParams }: { searchParams: SP }) {
               </label>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted">Changing a partner discount, the margin, VAT or the hours/GB/bandwidth settings re-prices every invoice still awaiting review (at its locked FX rate). Invoices already sent to clients are never changed.</p>
+          <p className="mt-3 text-xs text-muted">Changing a partner discount, the margin, VAT, the hours/GB/bandwidth settings, a rate card, a server size or a WAN tier re-prices every invoice still awaiting review (at its locked FX rate). Invoices already sent to clients are never changed.</p>
           <button className={`${btn} mt-4`}>Save settings</button>
         </form>
       </Card>

@@ -1,9 +1,11 @@
 import { audit } from "@/lib/admin/auth";
 import { back, guard, numOrNull, str } from "@/lib/admin/http";
 import { db } from "@/lib/server/db";
+import { repriceNote } from "@/lib/invoice/approve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** Update one rate card row. Blank list price = not offered ("To be quoted"). */
 export async function POST(req: Request) {
@@ -33,5 +35,5 @@ export async function POST(req: Request) {
   const { error } = await db().from("rate_cards").update({ ...next, updated_at: new Date().toISOString() }).eq("key", key);
   if (error) return back(req, "/admin/pricing", { err: error.message });
   await audit("rate_cards", key, "update", before, next);
-  return back(req, "/admin/pricing", { ok: `Saved ${old.service}.` });
+  return back(req, "/admin/pricing", { ok: `Saved ${old.service}.${await repriceNote(["rate_cards"])}` });
 }

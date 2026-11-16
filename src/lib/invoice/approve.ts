@@ -180,3 +180,13 @@ export async function repriceUnsentAfterSettings(by: string, changedKeys: string
   }
   return { repriced, failed };
 }
+
+/** Re-price waiting invoices after a pricing change and return a sentence for the admin's flash message. */
+export async function repriceNote(changed: string[]): Promise<string> {
+  try {
+    const r = await repriceUnsentAfterSettings("pricing change", changed);
+    return ` Re-priced ${r.repriced} invoice(s) awaiting review${r.failed ? `; ${r.failed} failed (see logs)` : ""}. Sent invoices are unchanged.`;
+  } catch (e) {
+    return ` Saved, but re-pricing waiting invoices failed: ${e instanceof Error ? e.message : String(e)}.`;
+  }
+}
