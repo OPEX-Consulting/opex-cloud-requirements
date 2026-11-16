@@ -15,7 +15,7 @@ type P = {
   expires_at: string | null;
   submitted_at: string | null;
 };
-type I = { project_id: string; number: string; version: number; monthly_total: number };
+type I = { project_id: string; number: string; version: number; monthly_total: number; chosen_partner: string; settings: { unicloudDiscount?: number; unitellasDiscount?: number } | null };
 
 const STATUS_STYLE: Record<string, string> = {
   invited: "bg-[#eef2f8] text-[#425066]",
@@ -26,11 +26,23 @@ const STATUS_STYLE: Record<string, string> = {
   reviewed: "bg-[#07152f] text-white",
 };
 
+/** Partner on the current invoice, with the discount that was locked in when it was priced. */
+function partnerCell(i: I) {
+  const d = i.chosen_partner === "Unitellas" ? i.settings?.unitellasDiscount : i.settings?.unicloudDiscount;
+  const tone = i.chosen_partner === "Unitellas" ? "bg-[#f1ecfb] text-[#5b3a9e]" : "bg-[#e8f1fd] text-[#1d4f91]";
+  return (
+    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>
+      {i.chosen_partner}
+      {typeof d === "number" ? ` · ${Math.round(d * 1000) / 10}%` : ""}
+    </span>
+  );
+}
+
 export default async function Projects({ searchParams }: { searchParams: SP }) {
   await requireAdmin();
   const [{ data: projects }, { data: invoices }] = await Promise.all([
     db().from("projects").select("id, customer_name, project_name, status, updated_at, expires_at, submitted_at").order("updated_at", { ascending: false }).limit(500),
-    db().from("invoices").select("project_id, number, version, monthly_total").eq("status", "current"),
+    db().from("invoices").select("project_id, number, version, monthly_total, chosen_partner, settings:inputs_snapshot->settings").eq("status", "current"),
   ]);
   const inv = new Map(((invoices ?? []) as I[]).map((i) => [i.project_id, i]));
   const f = (name: string, label: string, props: Record<string, unknown> = {}) => (
@@ -68,6 +80,7 @@ export default async function Projects({ searchParams }: { searchParams: SP }) {
                 <th className="py-2 pr-3">Project</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Invoice</th>
+                <th className="py-2 pr-3">Partner · discount</th>
                 <th className="py-2 pr-3 text-right">Monthly incl. VAT</th>
                 <th className="py-2 pr-3">Updated</th>
                 <th className="py-2 pr-3">Link expires</th>
@@ -89,6 +102,7 @@ export default async function Projects({ searchParams }: { searchParams: SP }) {
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[p.status] ?? ""}`}>{p.status.replace("_", " ")}</span>
                     </td>
                     <td className="py-2 pr-3">{i ? `${i.number} v${i.version}` : "—"}</td>
+                    <td className="py-2 pr-3">{i ? partnerCell(i) : "—"}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{i ? ngn(i.monthly_total) : "—"}</td>
                     <td className="py-2 pr-3">{when(p.updated_at)}</td>
                     <td className="py-2 pr-3">{when(p.expires_at)}</td>
