@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/auth";
 import { db } from "@/lib/server/db";
 import { REVIEW_LABELS, type ReviewStatus } from "@/lib/invoice/review";
+import { RowLink } from "../_rowlink";
 import { clientCc } from "@/lib/invoice/cc";
 import { CC_MAX } from "@/lib/invoice/cc-shared";
 import { AdminShell, Card, Flash, btn, input, ngn, when, type SP } from "../_ui";
@@ -45,7 +46,7 @@ function Table({ rows, empty }: { rows: Row[]; empty: string }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className="border-t border-[#eef1f5]">
+            <RowLink key={r.id} href={`/admin/reviews/${r.id}`}>
               <td className="py-2 pr-3">
                 <b>{r.projects?.customer_name || "—"}</b>
                 <div className="text-xs text-muted">{r.projects?.project_name}</div>
@@ -63,10 +64,10 @@ function Table({ rows, empty }: { rows: Row[]; empty: string }) {
               <td className="py-2 pr-3 text-xs">{r.reviewed_by ? `${r.reviewed_by}, ${when(r.reviewed_at)}` : "—"}</td>
               <td className="py-2 pr-3">
                 <Link href={`/admin/reviews/${r.id}`} className="font-semibold text-opex-blue hover:underline">
-                  Open
+                  Open →
                 </Link>
               </td>
-            </tr>
+            </RowLink>
           ))}
         </tbody>
       </table>

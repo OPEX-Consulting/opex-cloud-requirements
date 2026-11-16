@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RowLink } from "../_rowlink";
 import { requireAdmin } from "@/lib/admin/auth";
 import { db } from "@/lib/server/db";
 import { AdminShell, Card, Flash, btn, input, ngn, when, type SP } from "../_ui";
@@ -70,13 +71,14 @@ export default async function Projects({ searchParams }: { searchParams: SP }) {
                 <th className="py-2 pr-3 text-right">Monthly incl. VAT</th>
                 <th className="py-2 pr-3">Updated</th>
                 <th className="py-2 pr-3">Link expires</th>
+                <th className="py-2 pr-3"><span className="sr-only">Open</span></th>
               </tr>
             </thead>
             <tbody>
               {((projects ?? []) as P[]).map((p) => {
                 const i = inv.get(p.id);
                 return (
-                  <tr key={p.id} className="border-t border-[#eef1f5]">
+                  <RowLink key={p.id} href={`/admin/projects/${p.id}`}>
                     <td className="py-2 pr-3 font-semibold">
                       <Link href={`/admin/projects/${p.id}`} className="text-opex-blue hover:underline">
                         {p.customer_name || "(no name)"}
@@ -90,7 +92,8 @@ export default async function Projects({ searchParams }: { searchParams: SP }) {
                     <td className="py-2 pr-3 text-right tabular-nums">{i ? ngn(i.monthly_total) : "—"}</td>
                     <td className="py-2 pr-3">{when(p.updated_at)}</td>
                     <td className="py-2 pr-3">{when(p.expires_at)}</td>
-                  </tr>
+                    <td className="py-2 pr-3 text-right text-xs font-semibold text-opex-blue">Open →</td>
+                  </RowLink>
                 );
               })}
             </tbody>

@@ -119,9 +119,12 @@ button {
   cursor: pointer;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* In the base layer so colour utilities on links (text-opex-blue etc.) win over it. */
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 img,
