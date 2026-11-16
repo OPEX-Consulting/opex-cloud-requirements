@@ -6,7 +6,23 @@ export const dynamic = "force-dynamic";
 
 export default async function Payment({ searchParams }: { searchParams: SP }) {
   await requireAdmin();
-  const rows = await loadPaymentRows();
+  let rows: Awaited<ReturnType<typeof loadPaymentRows>> = [];
+  let loadError = "";
+  try {
+    rows = await loadPaymentRows();
+  } catch (e) {
+    loadError = e instanceof Error ? e.message : String(e);
+  }
+  if (loadError || !rows.length)
+    return (
+      <AdminShell active="payment">
+        <Card title="Bank account">
+          <p className="text-sm text-[#7a3412]">
+            Payment settings aren&apos;t available yet: apply supabase/migrations/0005_payment_details.sql to the database. {loadError && `(${loadError})`}
+          </p>
+        </Card>
+      </AdminShell>
+    );
   const last = rows.reduce<string | null>((m, r) => (!m || r.updated_at > m ? r.updated_at : m), null);
   const v = (k: string) => rows.find((r) => r.key === k)?.value ?? "";
   const set = Boolean(v("bank_name") && v("account_name") && v("account_number"));
