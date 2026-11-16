@@ -23,6 +23,15 @@ export async function Flash({ searchParams }: { searchParams: SP }) {
   );
 }
 
+/** "← Back to …" link shown at the top of admin detail pages. */
+export function BackLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link href={href} className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-opex-blue hover:underline">
+      <span aria-hidden>←</span> {label}
+    </Link>
+  );
+}
+
 export function AdminShell({ active, children }: { active: "projects" | "reviews" | "pricing" | "payment" | "zoho"; children: ReactNode }) {
   const tab = (href: string, label: string, on: boolean) => (
     // Inline colour: the unlayered global `a { color: inherit }` in globals.css beats Tailwind's layered text-* utilities,

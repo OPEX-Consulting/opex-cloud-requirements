@@ -10,7 +10,7 @@ import { amountDue } from "@/lib/invoice/due";
 import { canResend, REVIEW_LABELS, reviewable } from "@/lib/invoice/review";
 import { getInvoice } from "@/lib/invoice/service";
 import { clientCc } from "@/lib/invoice/cc";
-import { AdminShell, Card, Flash, btn, btnLight, input, ngn, when, type SP } from "../../_ui";
+import { AdminShell, BackLink, Card, Flash, btn, btnLight, input, ngn, when, type SP } from "../../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,7 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
 
   return (
     <AdminShell active="reviews">
+      <BackLink href="/admin/reviews" label="Back to reviews" />
       <Flash searchParams={searchParams} />
       <p className="mb-2 text-sm">
         <Link href="/admin/reviews" className="font-semibold text-opex-blue hover:underline">

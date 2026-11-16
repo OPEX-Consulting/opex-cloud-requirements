@@ -8,7 +8,7 @@ import { REVIEW_LABELS } from "@/lib/invoice/review";
 import { draftSchema, SERVER_KINDS, type Servers } from "@/lib/requirements/schema";
 import { Summary } from "@/app/requirements/_components/Summary";
 import { CopyButton } from "../../_copy";
-import { AdminShell, Card, Flash, btn, btnLight, input, ngn, when, type SP } from "../../_ui";
+import { AdminShell, BackLink, Card, Flash, btn, btnLight, input, ngn, when, type SP } from "../../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
 
   return (
     <AdminShell active="projects">
+      <BackLink href="/admin/projects" label="Back to projects" />
       <Flash searchParams={searchParams} />
       <h1 className="text-2xl font-bold">{p.customer_name}</h1>
       <p className="mb-5 text-sm text-secondary">
