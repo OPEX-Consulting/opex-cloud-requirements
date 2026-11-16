@@ -201,6 +201,7 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
   const [now, setNow] = useState(() => Date.now());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [stepError, setStepError] = useState("");
   const [submittedAt, setSubmittedAt] = useState<string | null>(payload.submittedAt);
   const [hasProgress, setHasProgress] = useState(Boolean(payload.draft));
 
@@ -353,12 +354,43 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
   const step = draft.currentStep;
   const headerProject = { ...project, customerName: draft.answers.contact.customerName?.trim() || project.customerName };
   const missing = useMemo(() => findMissing(draft.answers, draft.servers), [draft.answers, draft.servers]);
+  // The "complete required fields" message disappears as soon as the current step is complete.
+  const showStepError = Boolean(stepError) && missing.some((m) => m.step === draft.currentStep);
   const errorsFor = (s: number) =>
     visited.has(s) ? Object.fromEntries(missing.filter((m) => m.step === s).map((m) => [m.field, m.label])) : {};
 
+  /** First step (before `target`) that still has required items missing, or -1. */
+  const firstBlocking = (target: number) => {
+    for (let i = 0; i < Math.min(target, REVIEW_STEP); i++) if (missing.some((m) => m.step === i)) return i;
+    return -1;
+  };
+
   const goTo = (s: number) => {
+    const target = Math.max(0, Math.min(INVOICE_STEP, s));
+    const block = target > step ? firstBlocking(target) : -1;
+    if (block >= 0) {
+      // Required items on an earlier step are empty: stay (or return) there and highlight them.
+      setVisited((v) => new Set(v).add(step).add(block));
+      setStepError("Please complete the highlighted required fields before continuing.");
+      setDraft((d) => ({ ...d, currentStep: block }));
+      setScreen("form");
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const el = mainRef.current?.querySelector<HTMLElement>("[aria-invalid='true'], p[role='alert']");
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (el.matches("[aria-invalid='true']")) el.focus({ preventScroll: true });
+          } else {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            mainRef.current?.focus({ preventScroll: true });
+          }
+        }),
+      );
+      return;
+    }
+    setStepError("");
     setVisited((v) => new Set(v).add(step));
-    setDraft((d) => ({ ...d, currentStep: Math.max(0, Math.min(INVOICE_STEP, s)) }));
+    setDraft((d) => ({ ...d, currentStep: target }));
     setScreen("form");
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -645,13 +677,16 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
               {STEPS.map((s, i) => {
                 const st = stepState(i);
                 const active = i === step;
+                const locked = i > step && firstBlocking(i) >= 0;
                 return (
                   <li key={s.id}>
                     <button
                       type="button"
                       onClick={() => goTo(i)}
                       aria-current={active ? "step" : undefined}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] transition-colors ${
+                      aria-disabled={locked || undefined}
+                      title={locked ? "Complete the required fields on earlier steps first" : undefined}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] transition-colors ${locked ? "cursor-not-allowed opacity-50 " : ""}${
                         active ? "bg-white font-semibold text-opex-navy shadow-[0_2px_10px_rgb(7_21_47/6%)]" : "text-secondary hover:bg-surface-secondary"
                       }`}
                     >
@@ -790,12 +825,17 @@ export default function Portal({ payload }: { payload: PortalPayload }) {
                   )}
                 </button>
               )}
+              {showStepError && step < REVIEW_STEP && (
+                <p role="alert" className="max-w-sm text-xs font-medium text-[#b4532a] sm:text-right">
+                  {stepError}
+                </p>
+              )}
               {submitError && (
                 <p role="alert" className="max-w-sm text-xs font-medium text-[#b4532a] sm:text-right">
                   {submitError}
                 </p>
               )}
-              {step < REVIEW_STEP && <p className="text-[11px] text-muted sm:text-right">You can come back and change anything, even after you submit.</p>}
+              {step < REVIEW_STEP && !showStepError && <p className="text-[11px] text-muted sm:text-right">Fields marked required must be filled before you continue. You can come back and change anything, even after you submit.</p>}
               {step === REVIEW_STEP && !submittedNow && (
                 <button type="button" onClick={() => goTo(INVOICE_STEP)} className="text-xs font-semibold text-opex-blue underline underline-offset-4 sm:text-right">
                   Preview the invoice first
