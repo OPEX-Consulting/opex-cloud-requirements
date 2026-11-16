@@ -2,6 +2,9 @@ import Link from "next/link";
 import { RowLink } from "../_rowlink";
 import { requireAdmin } from "@/lib/admin/auth";
 import { db } from "@/lib/server/db";
+import { loadSettingRows, settingsFromRows } from "@/lib/pricing/data";
+import { partnerDiscount } from "@/lib/invoice/review";
+import type { PricingSettings } from "@/lib/pricing/types";
 import { AdminShell, Card, Flash, btn, input, ngn, when, type SP } from "../_ui";
 
 export const dynamic = "force-dynamic";
@@ -26,24 +29,35 @@ const STATUS_STYLE: Record<string, string> = {
   reviewed: "bg-[#07152f] text-white",
 };
 
-/** Partner on the current invoice, with the discount that was locked in when it was priced. */
-function partnerCell(i: I) {
-  const d = i.chosen_partner === "Unitellas" ? i.settings?.unitellasDiscount : i.settings?.unicloudDiscount;
+const pct = (d: number) => `${Math.round(d * 1000) / 10}%`;
+
+/** Partner on the current invoice, with the discount locked in when it was priced, flagged when today's setting differs. */
+function partnerCell(i: I, now: PricingSettings | null) {
+  const d = partnerDiscount(i.chosen_partner, i.settings);
+  const cur = partnerDiscount(i.chosen_partner, now);
+  const changed = typeof d === "number" && typeof cur === "number" && Math.abs(d - cur) > 1e-9;
   const tone = i.chosen_partner === "Unitellas" ? "bg-[#f1ecfb] text-[#5b3a9e]" : "bg-[#e8f1fd] text-[#1d4f91]";
   return (
     <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>
       {i.chosen_partner}
-      {typeof d === "number" ? ` · ${Math.round(d * 1000) / 10}%` : ""}
+      {typeof d === "number" ? ` · ${pct(d)}` : ""}
+      {changed ? (
+        <span className="ml-1 rounded bg-[#fff4e0] px-1 text-[#9a5b00]" title="The partner discount setting has changed since this invoice was priced.">
+          now {pct(cur!)}
+        </span>
+      ) : null}
     </span>
   );
 }
 
 export default async function Projects({ searchParams }: { searchParams: SP }) {
   await requireAdmin();
-  const [{ data: projects }, { data: invoices }] = await Promise.all([
+  const [{ data: projects }, { data: invoices }, settingRows] = await Promise.all([
     db().from("projects").select("id, customer_name, project_name, status, updated_at, expires_at, submitted_at").order("updated_at", { ascending: false }).limit(500),
     db().from("invoices").select("project_id, number, version, monthly_total, chosen_partner, settings:inputs_snapshot->settings").eq("status", "current"),
+    loadSettingRows().catch(() => null),
   ]);
+  const nowSettings = settingRows ? settingsFromRows(settingRows) : null;
   const inv = new Map(((invoices ?? []) as I[]).map((i) => [i.project_id, i]));
   const f = (name: string, label: string, props: Record<string, unknown> = {}) => (
     <label className="grid gap-1 text-xs font-semibold text-secondary">
@@ -102,7 +116,7 @@ export default async function Projects({ searchParams }: { searchParams: SP }) {
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[p.status] ?? ""}`}>{p.status.replace("_", " ")}</span>
                     </td>
                     <td className="py-2 pr-3">{i ? `${i.number} v${i.version}` : "—"}</td>
-                    <td className="py-2 pr-3">{i ? partnerCell(i) : "—"}</td>
+                    <td className="py-2 pr-3">{i ? partnerCell(i, nowSettings) : "—"}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{i ? ngn(i.monthly_total) : "—"}</td>
                     <td className="py-2 pr-3">{when(p.updated_at)}</td>
                     <td className="py-2 pr-3">{when(p.expires_at)}</td>

@@ -2,9 +2,12 @@ import { audit } from "@/lib/admin/auth";
 import { back, guard, numOrNull, str } from "@/lib/admin/http";
 import { db } from "@/lib/server/db";
 import { loadSettingRows } from "@/lib/pricing/data";
+import { repriceUnsentAfterSettings } from "@/lib/invoice/approve";
+import { needsAutoReprice } from "@/lib/invoice/review";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const ENUMS: Record<string, string[]> = {
   fx_mode: ["live", "live_buffer", "fixed"],
@@ -20,7 +23,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   const form = await req.formData();
   const rows = await loadSettingRows();
-  let changed = 0;
+  const changedKeys: string[] = [];
   for (const r of rows) {
     if (!form.has(r.key)) continue;
     const raw = form.get(r.key);
@@ -40,7 +43,17 @@ export async function POST(req: Request) {
     const { error } = await db().from("pricing_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", r.key);
     if (error) return back(req, "/admin/pricing", { err: error.message });
     await audit("pricing_settings", r.key, "update", r.value, value);
-    changed++;
+    changedKeys.push(r.key);
   }
-  return back(req, "/admin/pricing", { ok: changed ? `Saved ${changed} setting(s).` : "No changes." });
+  if (!changedKeys.length) return back(req, "/admin/pricing", { ok: "No changes." });
+  let note = "";
+  if (needsAutoReprice(changedKeys)) {
+    try {
+      const r = await repriceUnsentAfterSettings("settings change", changedKeys);
+      note = ` Re-priced ${r.repriced} invoice(s) awaiting review${r.failed ? `; ${r.failed} failed (see logs)` : ""}. Sent invoices are unchanged.`;
+    } catch (e) {
+      note = ` Settings saved, but re-pricing waiting invoices failed: ${e instanceof Error ? e.message : String(e)}.`;
+    }
+  }
+  return back(req, "/admin/pricing", { ok: `Saved ${changedKeys.length} setting(s).${note}` });
 }

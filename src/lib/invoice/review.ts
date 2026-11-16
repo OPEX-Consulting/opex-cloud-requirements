@@ -58,3 +58,30 @@ export function clientInvoiceState<R extends { status: string; review_status: Re
 }
 
 export const partnerName = (p: Partner) => p;
+
+/** Pricing settings whose change re-prices invoices still waiting for review (FX stays locked per version). */
+export const REPRICE_KEYS = [
+  "unicloud_discount",
+  "unitellas_discount",
+  "default_margin",
+  "vat",
+  "hours_per_month",
+  "gb_per_tb",
+  "unicloud_internet_cap_mbps",
+] as const;
+
+export const needsAutoReprice = (changedKeys: string[]) => changedKeys.some((k) => (REPRICE_KEYS as readonly string[]).includes(k));
+
+/**
+ * Inputs for re-pricing an unsent version after a settings change: the client's answers as locked,
+ * a margin the admin set on this invoice wins, otherwise the current default margin.
+ */
+export function autoRepriceInputs(base: EngineInputs, o: ReviewOverrides | null | undefined, defaultMargin: number): EngineInputs {
+  return applyOverrides({ ...base, margin: defaultMargin }, o);
+}
+
+/** The discount for a partner in a settings object (locked snapshot or current). */
+export function partnerDiscount(partner: string, s: { unicloudDiscount?: number; unitellasDiscount?: number } | null | undefined) {
+  if (!s) return undefined;
+  return partner === "Unitellas" ? s.unitellasDiscount : s.unicloudDiscount;
+}

@@ -8,7 +8,7 @@ import type { PartnerChoice } from "../pricing/types";
 import { INVOICE_TEXT } from "./company";
 import { sendInvoiceToClient } from "./clientmail";
 import { issuedPdf } from "./issue";
-import { canResend, reviewable, type ReviewOverrides } from "./review";
+import { autoRepriceInputs, canResend, reviewable, type ReviewOverrides } from "./review";
 import { getInvoice, pricedFields, type InvoiceRow } from "./service";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
@@ -128,4 +128,55 @@ export async function resendInvoice(id: string, reviewer: string): Promise<Actio
   if (!data) return { ok: false, message: "Someone else is sending this invoice. Reload the page." };
   await audit("invoices", `${row.number} v${row.version}`, "update", { review_status: row.review_status }, { review_status: "resend", by: reviewer });
   return deliver(data as InvoiceRow);
+}
+
+/**
+ * After a pricing-settings change (discounts, margin, VAT…), re-price every version still waiting for review
+ * with the new settings. Sent / approved / Zoho versions are frozen and untouched. FX stays as locked on each version.
+ * A margin or partner the admin set on an invoice is kept. Each re-price bumps the revision (so a review page
+ * opened before the change can't approve stale figures) and is audited.
+ */
+export async function repriceUnsentAfterSettings(by: string, changedKeys: string[]): Promise<{ repriced: number; failed: number }> {
+  const { data, error } = await db()
+    .from("invoices")
+    .select("*")
+    .eq("status", "current")
+    .in("review_status", ["pending_review", "rejected"])
+    .is("zoho_invoice_id", null)
+    .limit(500);
+  if (error) throw new Error(`unsent invoices lookup failed: ${error.message}`);
+  const pricing = await loadPricing();
+  let repriced = 0;
+  let failed = 0;
+  for (const row of (data ?? []) as InvoiceRow[]) {
+    if (!reviewable(row)) continue;
+    try {
+      const inputs = autoRepriceInputs(row.inputs_snapshot.inputs, row.review_overrides, pricing.settings.defaultMargin);
+      const fx = { rate: Number(row.fx_rate_used), source: row.fx_source };
+      const result = priceQuote(inputs, pricing, fx.rate, INVOICE_TEXT.clientNote);
+      const fields = pricedFields(result, fx, inputs, { assumptions: row.inputs_snapshot.assumptions }, row.inputs_snapshot.billTo, pricing, row.inputs_hash);
+      const rev = row.revision ?? 1;
+      const { data: upd } = await db()
+        .from("invoices")
+        .update({ ...fields, revision: rev + 1 })
+        .eq("id", row.id)
+        .eq("revision", rev)
+        .in("review_status", ["pending_review", "rejected"])
+        .select("id")
+        .maybeSingle();
+      if (!upd) continue; // changed meanwhile (client resubmitted or an admin acted): leave it
+      await audit(
+        "invoices",
+        `${row.number} v${row.version}`,
+        "update",
+        { partner: row.chosen_partner, monthly_total: row.monthly_total },
+        { reason: "settings changed", keys: changedKeys, chosen: result.comparison.chosen, monthly_total: result.quote.monthlyTotal, by },
+      );
+      repriced++;
+    } catch (e) {
+      console.error("[reprice-after-settings]", row.id, e);
+      failed++;
+    }
+  }
+  return { repriced, failed };
 }

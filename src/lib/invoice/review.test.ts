@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyOverrides, canResend, clientInvoiceState, isFrozen, reviewable, STUCK_SEND_MS, type ReviewStatus } from "./review";
+import { applyOverrides, autoRepriceInputs, canResend, needsAutoReprice, partnerDiscount, clientInvoiceState, isFrozen, reviewable, STUCK_SEND_MS, type ReviewStatus } from "./review";
 import type { EngineInputs } from "../pricing/types";
 
 const row = (version: number, status: string, review_status: ReviewStatus, extra: Record<string, unknown> = {}) => ({ version, status, review_status, ...extra });
@@ -54,4 +54,26 @@ test("overrides replace partner and margin only", () => {
   assert.deepEqual(applyOverrides(base, {}), base);
   assert.deepEqual(applyOverrides(base, { partner: "Unitellas", margin: 0.35 }), { ...base, partner: "Unitellas", margin: 0.35 });
   assert.equal(applyOverrides(base, { margin: Number.NaN }).margin, 0.2);
+});
+
+test("settings change: discounts/margin/VAT trigger a re-price, FX and display settings don't", () => {
+  assert.equal(needsAutoReprice(["unitellas_discount"]), true);
+  assert.equal(needsAutoReprice(["default_margin", "show_partner"]), true);
+  assert.equal(needsAutoReprice(["fx_mode", "fx_buffer_pct", "show_partner", "quote_validity_days"]), false);
+});
+
+test("auto re-price uses the new default margin unless the admin set one on the invoice", () => {
+  const base = { margin: 0.2, partner: "Recommended" } as unknown as EngineInputs;
+  assert.equal(autoRepriceInputs(base, {}, 0.25).margin, 0.25);
+  assert.equal(autoRepriceInputs(base, null, 0.25).margin, 0.25);
+  const kept = autoRepriceInputs(base, { margin: 0.3, partner: "UniCloud" }, 0.25);
+  assert.equal(kept.margin, 0.3);
+  assert.equal(kept.partner, "UniCloud");
+});
+
+test("partner discount lookup", () => {
+  const s = { unicloudDiscount: 0.1, unitellasDiscount: 0.45 };
+  assert.equal(partnerDiscount("Unitellas", s), 0.45);
+  assert.equal(partnerDiscount("UniCloud", s), 0.1);
+  assert.equal(partnerDiscount("UniCloud", null), undefined);
 });
