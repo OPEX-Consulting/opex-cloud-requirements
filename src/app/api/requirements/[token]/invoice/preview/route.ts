@@ -6,6 +6,7 @@ import { effectiveFx } from "@/lib/pricing/fx";
 import { priceQuote } from "@/lib/pricing/engine";
 import { INVOICE_TEXT } from "@/lib/invoice/company";
 import { addDays, buildInvoiceView } from "@/lib/invoice/view";
+import { loadPaymentDetails } from "@/lib/invoice/payment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       chosen: r.comparison.chosen,
       settings: pricing.settings,
       billTo,
+      payment: await loadPaymentDetails(),
     });
     return json({ success: true, invoice, assumptions: mapped.assumptions });
   } catch (error) {

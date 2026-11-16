@@ -243,23 +243,31 @@ export function InvoiceStep({
           <div className="grid gap-5 md:grid-cols-2">
             <section className="rounded-[18px] border border-border bg-white p-5">
               <h3 className="text-[15px] font-semibold text-opex-navy">Payment details</h3>
-              <dl className="mt-3 grid gap-1.5 text-[13px]">
-                {(
-                  [
-                    ["Bank", inv.payment.bankName],
-                    ["Account name", inv.payment.accountName],
-                    ["Account number", inv.payment.accountNumber],
-                    ["Sort code", inv.payment.sortCode],
-                    ["Reference", inv.status === "preview" ? "Your invoice number" : inv.payment.reference],
-                  ] as const
-                ).map(([k, v]) => (
-                  <div key={k} className="grid grid-cols-[120px_1fr] gap-2">
-                    <dt className="text-muted">{k}</dt>
-                    <dd className="font-semibold text-opex-navy">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-              <p className="mt-3 text-xs leading-5 text-muted">{inv.payment.instructions}</p>
+              {inv.payment.configured ? (
+                <>
+                  <dl className="mt-3 grid gap-1.5 text-[13px]">
+                    {(
+                      [
+                        ["Bank", inv.payment.bankName],
+                        ["Account name", inv.payment.accountName],
+                        ["Account number", inv.payment.accountNumber],
+                        ["Sort code", inv.payment.sortCode],
+                        ["Reference", inv.status === "preview" ? "Your invoice number" : inv.payment.reference],
+                      ] as const
+                    )
+                      .filter(([, v]) => v)
+                      .map(([k, v]) => (
+                        <div key={k} className="grid grid-cols-[120px_1fr] gap-2">
+                          <dt className="text-muted">{k}</dt>
+                          <dd className="font-semibold text-opex-navy">{v}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                  <p className="mt-3 text-xs leading-5 text-muted">{inv.payment.instructions}</p>
+                </>
+              ) : (
+                <p className="mt-3 text-[13px] leading-6 text-secondary">Bank details will be sent with your final invoice.</p>
+              )}
             </section>
             <section className="rounded-[18px] border border-border bg-white p-5">
               <h3 className="text-[15px] font-semibold text-opex-navy">Terms and notes</h3>

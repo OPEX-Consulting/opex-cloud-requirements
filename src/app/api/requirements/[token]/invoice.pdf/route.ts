@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { isDemo, loadDraft } from "@/lib/requirements/server";
 import { checkToken, json, NO_STORE } from "@/lib/requirements/http";
 import { ensureInvoice, rowToView } from "@/lib/invoice/service";
+import { loadPaymentDetails } from "@/lib/invoice/payment";
 import { renderInvoicePdf } from "@/lib/invoice/pdf";
 import { notifyInvoiceDownload } from "@/lib/invoice/email";
 import { loadSettingRows, settingsFromRows } from "@/lib/pricing/data";
@@ -100,7 +101,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
 
     if (!pdf) {
       const settings = settingsFromRows(await loadSettingRows());
-      pdf = await renderInvoicePdf(rowToView(row, settings.showPartner), { projectName: found.p.project_name ?? "" });
+      pdf = await renderInvoicePdf(rowToView(row, settings.showPartner, await loadPaymentDetails()), { projectName: found.p.project_name ?? "" });
     }
     const served = pdf;
     after(() =>

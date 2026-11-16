@@ -296,5 +296,6 @@ export type InvoiceView = {
   notes: string[];
   partnerLine: string | null;
   billTo: { name: string; address: string; contactName: string; contactEmail: string; contactPhone: string };
-  payment: { bankName: string; accountName: string; accountNumber: string; sortCode: string; reference: string; instructions: string };
+  /** configured = bank, account name and account number are set at /admin/payment. */
+  payment: { configured: boolean; bankName: string; accountName: string; accountNumber: string; sortCode: string; reference: string; instructions: string };
 };

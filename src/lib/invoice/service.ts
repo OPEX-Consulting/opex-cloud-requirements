@@ -17,6 +17,7 @@ import { engineInputsFromRequirements } from "../pricing/fromRequirements";
 import type { EngineInputs, EngineResult, Partner, PricingData } from "../pricing/types";
 import type { Draft, InvoiceView } from "../requirements/schema";
 import { INVOICE_TEXT } from "./company";
+import type { PaymentDetails } from "./payment";
 import { addDays, billToFrom, buildInvoiceView, type BillTo } from "./view";
 
 export type InvoiceRow = {
@@ -207,7 +208,8 @@ async function markIssued(row: InvoiceRow, reason: Reason): Promise<InvoiceRow> 
   return data as InvoiceRow;
 }
 
-export function rowToView(row: InvoiceRow, showPartner: boolean): InvoiceView {
+/** payment: the CURRENT bank details from /admin/payment (not a snapshot), so a changed account shows everywhere. */
+export function rowToView(row: InvoiceRow, showPartner: boolean, payment: PaymentDetails): InvoiceView {
   const due = amountDue(row);
   const view = buildInvoiceView({
     id: row.id,
@@ -220,6 +222,7 @@ export function rowToView(row: InvoiceRow, showPartner: boolean): InvoiceView {
     chosen: row.chosen_partner,
     settings: { showPartner },
     billTo: row.inputs_snapshot.billTo,
+    payment,
   });
   return { ...view, amountDueNow: due.amount, amountDueLabel: due.label };
 }

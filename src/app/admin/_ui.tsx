@@ -23,7 +23,7 @@ export async function Flash({ searchParams }: { searchParams: SP }) {
   );
 }
 
-export function AdminShell({ active, children }: { active: "projects" | "pricing" | "zoho"; children: ReactNode }) {
+export function AdminShell({ active, children }: { active: "projects" | "pricing" | "payment" | "zoho"; children: ReactNode }) {
   const tab = (href: string, label: string, on: boolean) => (
     // Inline colour: the unlayered global `a { color: inherit }` in globals.css beats Tailwind's layered text-* utilities,
     // which left these tabs dark-on-navy (invisible).
@@ -45,6 +45,7 @@ export function AdminShell({ active, children }: { active: "projects" | "pricing
             <nav className="flex gap-1">
               {tab("/admin/projects", "Projects", active === "projects")}
               {tab("/admin/pricing", "Pricing", active === "pricing")}
+              {tab("/admin/payment", "Payment details", active === "payment")}
               {tab("/admin/zoho", "Zoho Books", active === "zoho")}
             </nav>
           </div>

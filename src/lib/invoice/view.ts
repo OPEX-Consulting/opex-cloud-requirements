@@ -3,6 +3,7 @@ import type { InvoiceView } from "../requirements/schema";
 import type { Answers } from "../requirements/schema";
 import type { EngineResult, Partner, PricingSettings } from "../pricing/types";
 import { COMPANY, INVOICE_TEXT, PAYMENT } from "./company";
+import { DEFAULT_PAYMENT_INSTRUCTIONS, paymentConfigured, type PaymentDetails } from "./payment-shared";
 
 export type BillTo = InvoiceView["billTo"];
 
@@ -35,7 +36,9 @@ export function buildInvoiceView(args: {
   chosen: Partner;
   settings: Pick<PricingSettings, "showPartner">;
   billTo: BillTo;
+  payment: PaymentDetails;
 }): InvoiceView {
+  const p = args.payment;
   const q = args.quote;
   const assumedCount = q.lines.filter((l) => l.assumed).length;
   const notes = [...q.notes];
@@ -73,12 +76,13 @@ export function buildInvoiceView(args: {
     partnerLine: args.settings.showPartner ? `Infrastructure partner: ${PARTNER_NAMES[args.chosen]}` : null,
     billTo: args.billTo,
     payment: {
-      bankName: PAYMENT.bankName,
-      accountName: PAYMENT.accountName,
-      accountNumber: PAYMENT.accountNumber,
-      sortCode: PAYMENT.sortCode,
+      configured: paymentConfigured(p),
+      bankName: p.bankName,
+      accountName: p.accountName,
+      accountNumber: p.accountNumber,
+      sortCode: p.sortCode,
       reference: PAYMENT.referenceTemplate.replace("{number}", args.number),
-      instructions: PAYMENT.instructions,
+      instructions: p.instructions || DEFAULT_PAYMENT_INSTRUCTIONS,
     },
   };
 }

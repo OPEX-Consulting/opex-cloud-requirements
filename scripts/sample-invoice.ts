@@ -24,5 +24,9 @@ const v = buildInvoiceView({
   id: null, number: "OPX-261106-001", version: 1, status: "current", createdAt: now, validUntil: addDays(now, 30),
   quote: r.quote, chosen: r.comparison.chosen, settings: { showPartner: false },
   billTo: { name: "Sample Client Ltd", address: "1 Test Road, Ikoyi, Lagos", contactName: "Head of ICT", contactEmail: "ict@example.com", contactPhone: "+234 000 000 0000" },
+  // SAMPLE_BANK=1 renders with sample bank details; otherwise the "not set" wording.
+  payment: process.env.SAMPLE_BANK
+    ? { bankName: "Sample Bank Plc", accountName: "OPEX Consulting Limited", accountNumber: "0123456789", sortCode: "", instructions: "" }
+    : { bankName: "", accountName: "", accountNumber: "", sortCode: "", instructions: "" },
 });
 renderInvoicePdf(v, { projectName: "Sample migration" }).then((b) => writeFileSync(process.argv[2] ?? "invoice.pdf", b));

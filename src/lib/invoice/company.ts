@@ -20,14 +20,10 @@ export const COMPANY = {
   vatNumber: "[PLACEHOLDER: VAT registration number]",
 };
 
+/** Bank details are edited at /admin/payment (table payment_settings), not here. */
 export const PAYMENT = {
-  bankName: "[PLACEHOLDER: bank name]",
-  accountName: "[PLACEHOLDER: account name]",
-  accountNumber: "[PLACEHOLDER: 10-digit NUBAN account number]",
-  sortCode: "[PLACEHOLDER: sort code]",
   /** {number} is replaced with the invoice number. */
   referenceTemplate: "{number}",
-  instructions: "Please quote the invoice number as the payment reference. [PLACEHOLDER: payment terms, e.g. due within 14 days]",
 };
 
 export const INVOICE_TEXT = {

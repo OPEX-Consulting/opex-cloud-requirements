@@ -201,14 +201,23 @@ export async function renderInvoicePdf(v: InvoiceView, opts: { projectName?: str
   c.y = ty - 30;
 
   /* ---- Payment details ---- */
-  const pay: [string, string][] = [
-    ["Bank", v.payment.bankName],
-    ["Account name", v.payment.accountName],
-    ["Account number", v.payment.accountNumber],
-    ["Sort code", v.payment.sortCode],
-    ["Payment reference", v.payment.reference],
-  ];
-  const instr = wrap(v.payment.instructions, reg, 8, W - 20);
+  const pay: [string, string][] = v.payment.configured
+    ? ([
+        ["Bank", v.payment.bankName],
+        ["Account name", v.payment.accountName],
+        ["Account number", v.payment.accountNumber],
+        ["Sort code", v.payment.sortCode],
+        ["Payment reference", v.payment.reference],
+      ] as [string, string][]).filter(([, val]) => val)
+    : [];
+  const instr = wrap(
+    v.payment.configured
+      ? v.payment.instructions
+      : `Bank details will be sent with your final invoice. For anything in the meantime, contact ${COMPANY.email}.`,
+    reg,
+    8,
+    W - 20,
+  );
   const payH = 26 + pay.length * 12 + instr.length * 10 + 10;
   ensure(c, v, payH);
   c.page.drawRectangle({ x: M, y: c.y - payH + 12, width: W, height: payH, color: LIGHT });

@@ -1,3 +1,4 @@
+import { loadPaymentDetails } from "@/lib/invoice/payment";
 import { isDemo, loadDraft } from "@/lib/requirements/server";
 import { checkToken, json } from "@/lib/requirements/http";
 import { ensureInvoice, listInvoices, rowToView } from "@/lib/invoice/service";
@@ -24,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
       monthlyTotal: Number(v.monthly_total),
       issued: Boolean(v.issued_at),
     }));
-    return json({ success: true, invoice: rowToView(row, settings.showPartner), versions, assumptions: row.inputs_snapshot.assumptions });
+    return json({ success: true, invoice: rowToView(row, settings.showPartner, await loadPaymentDetails()), versions, assumptions: row.inputs_snapshot.assumptions });
   } catch (error) {
     console.error("[invoice] load failed", error);
     return json({ success: false, message: "We couldn't prepare your invoice just now." }, 500);

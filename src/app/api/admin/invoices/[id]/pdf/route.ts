@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin/auth";
 import { ADMIN_HEADERS } from "@/lib/admin/http";
 import { getInvoice, rowToView } from "@/lib/invoice/service";
+import { loadPaymentDetails } from "@/lib/invoice/payment";
 import { renderInvoicePdf } from "@/lib/invoice/pdf";
 import { loadSettingRows, settingsFromRows } from "@/lib/pricing/data";
 import { db } from "@/lib/server/db";
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!row) return NextResponse.json({ ok: false }, { status: 404, headers: ADMIN_HEADERS });
   const { data: p } = await db().from("projects").select("project_name").eq("id", row.project_id).maybeSingle();
   const settings = settingsFromRows(await loadSettingRows());
-  const pdf = await renderInvoicePdf(rowToView(row, settings.showPartner), { projectName: p?.project_name ?? "" });
+  const pdf = await renderInvoicePdf(rowToView(row, settings.showPartner, await loadPaymentDetails()), { projectName: p?.project_name ?? "" });
   return new Response(Buffer.from(pdf), {
     headers: { ...ADMIN_HEADERS, "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${row.number}-v${row.version}.pdf"` },
   });
