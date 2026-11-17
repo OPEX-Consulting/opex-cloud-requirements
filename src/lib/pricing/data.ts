@@ -1,5 +1,6 @@
 // Server-only: load pricing data from Supabase (falls back to the sheet defaults when Supabase is not configured).
 import { db, must, supabaseConfigured } from "../server/db";
+import { NON_PRICING_KEYS } from "../invoice/cc-shared";
 import { DEFAULT_PRICING, DEFAULT_SETTINGS } from "./defaults";
 import type { PricingData, PricingSettings, RateCard, UnitellasSize, UnitellasWan } from "./types";
 
@@ -28,8 +29,8 @@ export type SettingRow = { key: string; value: unknown; label: string; note: str
 const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
 
 export async function loadSettingRows(): Promise<SettingRow[]> {
-  // The client CC list lives in the same table but is managed on /admin/reviews, not the pricing page.
-  return must(await db().from("pricing_settings").select("*").neq("key", "client_email_cc").order("sort"), "pricing_settings") as SettingRow[];
+  // The CC lists live in the same table but is managed on /admin/reviews, not the pricing page.
+  return must(await db().from("pricing_settings").select("*").not("key", "in", `(${NON_PRICING_KEYS.join(",")})`).order("sort"), "pricing_settings") as SettingRow[];
 }
 
 export function settingsFromRows(rows: SettingRow[]): PricingSettings {

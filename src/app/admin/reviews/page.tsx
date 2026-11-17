@@ -3,7 +3,9 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { db } from "@/lib/server/db";
 import { REVIEW_LABELS, type ReviewStatus } from "@/lib/invoice/review";
 import { RowLink } from "../_rowlink";
-import { clientCc } from "@/lib/invoice/cc";
+import { clientCc, reviewCc } from "@/lib/invoice/cc";
+import { EMAIL } from "@/lib/invoice/company";
+import { cleanAddress } from "@/lib/invoice/email";
 import { CC_MAX } from "@/lib/invoice/cc-shared";
 import { AdminShell, Card, Flash, btn, input, ngn, when, type SP } from "../_ui";
 
@@ -77,10 +79,11 @@ function Table({ rows, empty }: { rows: Row[]; empty: string }) {
 
 export default async function Reviews({ searchParams }: { searchParams: SP }) {
   await requireAdmin();
-  const [{ data: open }, { data: done }, cc] = await Promise.all([
+  const [{ data: open }, { data: done }, cc, rcc] = await Promise.all([
     db().from("invoices").select(COLS).eq("status", "current").in("review_status", ["pending_review", "approved", "send_failed", "rejected"]).order("created_at"),
     db().from("invoices").select(COLS).eq("review_status", "sent").order("sent_at", { ascending: false }).limit(20),
     clientCc(),
+    reviewCc(),
   ]);
   const rows = (open ?? []) as unknown as Row[];
   const waiting = rows.filter((r) => r.review_status !== "rejected");
@@ -99,6 +102,17 @@ export default async function Reviews({ searchParams }: { searchParams: SP }) {
           <textarea name="cc" rows={Math.min(8, Math.max(3, cc.length + 1))} defaultValue={cc.join("\n")} className={`${input} h-auto py-2 font-mono`} aria-label="CC addresses" />
           <div>
             <button className={btn}>Save copy list</button>
+          </div>
+        </form>
+      </Card>
+      <Card title="Copy on review alerts">
+        <form action="/api/admin/review-cc" method="post" className="grid gap-2">
+          <p className="text-sm text-secondary">
+            The &ldquo;Invoice to review&rdquo; alert always goes to <b>{cleanAddress(EMAIL.alertTo)}</b>. It is also copied (CC) to these addresses. One per line, up to {CC_MAX}. Leave empty for no copy.
+          </p>
+          <textarea name="cc" rows={Math.min(8, Math.max(3, rcc.length + 1))} defaultValue={rcc.join("\n")} className={`${input} h-auto py-2 font-mono`} aria-label="Review alert CC addresses" />
+          <div>
+            <button className={btn}>Save review copy list</button>
           </div>
         </form>
       </Card>

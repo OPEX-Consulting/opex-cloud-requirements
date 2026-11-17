@@ -3,6 +3,10 @@ import { isEmail } from "../requirements/logic";
 
 /** Stored as a row in pricing_settings (jsonb array of addresses); hidden from the pricing settings page. */
 export const CC_KEY = "client_email_cc";
+/** Extra addresses copied (CC) on the internal "Invoice to review" alert. Also managed on /admin/reviews. */
+export const REVIEW_CC_KEY = "review_alert_cc";
+/** Keys kept in pricing_settings that are not pricing settings (hidden from /admin/pricing). */
+export const NON_PRICING_KEYS = [CC_KEY, REVIEW_CC_KEY];
 export const CC_MAX = 20;
 
 /** Split on commas, semicolons, spaces or new lines; lower-case; de-duplicate; keep order. */

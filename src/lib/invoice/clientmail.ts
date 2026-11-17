@@ -6,7 +6,7 @@ import { db } from "../server/db";
 import { isEmail } from "../requirements/logic";
 import { COMPANY, EMAIL } from "./company";
 import { amountDue } from "./due";
-import { clientCc } from "./cc";
+import { clientCc, reviewCc } from "./cc";
 import { cleanAddress, esc, smtpHost, smtpReady, smtpTransport } from "./email";
 import { loadPaymentDetails } from "./payment";
 import { paymentConfigured } from "./payment-shared";
@@ -38,6 +38,7 @@ export async function notifyReviewNeeded(args: { invoice: InvoiceRow; customerNa
       .limit(1);
     if (recent?.length) return void (await outbox({ ...base, status: "debounced" }));
     if (!smtpReady()) return void (await outbox({ ...base, status: "skipped_no_provider", error: "SMTP_HOST / SMTP_USER / SMTP_PASS not set" }));
+    const cc = (await reviewCc().catch(() => [] as string[])).filter((a) => a !== to.toLowerCase());
     const id = await outbox({ ...base, status: "pending" });
     const rows: [string, string][] = [
       ["Client", args.customerName || "—"],
@@ -54,7 +55,7 @@ export async function notifyReviewNeeded(args: { invoice: InvoiceRow; customerNa
 <p><a href="${esc(args.adminUrl)}">Review and approve or reject</a></p></div>`;
     const text = `Invoice waiting for review (not sent to the client).\n\n${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\nReview: ${args.adminUrl}`;
     try {
-      const info = await smtpTransport(smtpHost()).sendMail({ from: EMAIL.from, to, subject, html, text });
+      const info = await smtpTransport(smtpHost()).sendMail({ from: EMAIL.from, to, ...(cc.length ? { cc } : {}), subject, html, text });
       await db().from("notifications").update({ status: "sent", provider_id: info.messageId ?? null, sent_at: new Date().toISOString() }).eq("id", id);
     } catch (err) {
       await db().from("notifications").update({ status: "failed", error: `SMTP: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500) }).eq("id", id);
