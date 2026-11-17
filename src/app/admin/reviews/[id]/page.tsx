@@ -43,11 +43,6 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
     <AdminShell active="reviews">
       <BackLink href="/admin/reviews" label="Back to reviews" />
       <Flash searchParams={searchParams} />
-      <p className="mb-2 text-sm">
-        <Link href="/admin/reviews" className="font-semibold text-opex-blue hover:underline">
-          ← Reviews
-        </Link>
-      </p>
       <h1 className="text-2xl font-bold">
         {row.number} v{row.version} · {REVIEW_LABELS[row.review_status]}
       </h1>
